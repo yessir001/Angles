@@ -308,39 +308,45 @@
       }
 
       function drawAngle(angleDeg){
+        // IMPORTANT: Angles are measured counter-clockwise from the positive x-axis (rightward)
+        // In our coordinate system, the baseline goes rightward from vertex
         const t = (angleDeg * Math.PI) / 180;
-        // Fix: Calculate from the positive x-axis (rightward from vertex)
+        
+        // Calculate ray endpoint
+        // cos(0°) = 1, sin(0°) = 0 means rightward
+        // cos(90°) = 0, sin(90°) = 1 means upward (but SVG y is inverted)
         const x2 = vertex.x + RAY_LEN * Math.cos(t);
         const y2 = vertex.y - RAY_LEN * Math.sin(t); // Negative because SVG y increases downward
         
         rayLine.setAttribute('x1', vertex.x);
         rayLine.setAttribute('y1', vertex.y);
-        rayLine.setAttribute('x2', x2);
-        rayLine.setAttribute('y2', y2);
+        rayLine.setAttribute('x2', format(x2));
+        rayLine.setAttribute('y2', format(y2));
 
         // Remove the outer convex curve - we don't need it
         arcPath.setAttribute('d', '');
         arcPath.dataset.cy = '0'; // Keep for tests
 
-        // Inner vertex arc (standard angle mark) - measure from baseline to ray
+        // Inner vertex arc (standard angle mark)
         const SMALL_R = 42;
         // Start point on baseline (0 degrees = rightward)
         const ax2 = vertex.x + SMALL_R;
         const ay2 = vertex.y;
-        // End point along the ray
+        // End point along the ray at the given angle
         const bx2 = vertex.x + SMALL_R * Math.cos(t);
         const by2 = vertex.y - SMALL_R * Math.sin(t);
         
-        // For angles > 180, we need the large arc flag
+        // For SVG arcs: large-arc-flag determines if arc > 180°
         const largeArc = angleDeg > 180 ? 1 : 0;
-        // Sweep flag 0 for counter-clockwise (upward from baseline)
+        // Sweep flag 0 means counter-clockwise (which appears as clockwise visually due to inverted y)
         const sweep = 0;
         
         const dInner = `M ${format(ax2)} ${format(ay2)} A ${SMALL_R} ${SMALL_R} 0 ${largeArc} ${sweep} ${format(bx2)} ${format(by2)}`;
         innerArcPath.setAttribute('d', dInner);
         
-        // Debug: Log the actual angle being drawn
-        console.log(`Drawing angle: ${angleDeg}°`);
+        // Store the actual angle for debugging
+        window.currentDrawnAngle = angleDeg;
+        console.log(`Angle set to: ${angleDeg}°`);
       }
 
       function setPenguinState(state){
@@ -401,6 +407,9 @@
         nextBtn.disabled = true;
         checkBtn.disabled = false;
         setPenguinState('idle');
+        
+        // Add hint in console for debugging
+        console.log(`%cNew question: Angle is ${currentAngle}° (Type window.currentDrawnAngle to check)`, 'color: blue; font-weight: bold');
       }
 
       function finishQuiz(){
@@ -430,7 +439,14 @@
           setPenguinState('sad');
           return;
         }
-        const ok = isWithinTolerance(val, currentAngle);
+        
+        // Round both values to avoid floating point issues
+        const roundedVal = Math.round(val);
+        const roundedCurrent = Math.round(currentAngle);
+        
+        // Check if within tolerance
+        const ok = Math.abs(roundedVal - roundedCurrent) <= TOLERANCE;
+        
         if(ok){
           feedback.innerHTML = `✅ <span class="good">Correct!</span> The angle is <strong>${currentAngle}°</strong>.`;
           setPenguinState('happy');
@@ -440,7 +456,11 @@
           checkBtn.disabled = true;
         } else {
           setPenguinState('sad');
-          const error = Math.abs(val - currentAngle);
+          const error = Math.abs(roundedVal - roundedCurrent);
+          
+          // Debug info in console
+          console.log(`Expected: ${currentAngle}°, Got: ${val}°, Error: ${error}°`);
+          
           if(error >= 15){
             feedback.innerHTML = `❌ <span class="bad">Almost! You're off by about ${Math.round(error)}°.</span> Try measuring again.`;
           } else {
